@@ -7,7 +7,26 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Clock, User, Bike, MapPin, CreditCard, ChevronDown } from "lucide-react";
+import { 
+  Loader2, 
+  Clock, 
+  User, 
+  Bike, 
+  MapPin, 
+  CreditCard, 
+  ChevronDown,
+  Landmark,
+  Banknote
+} from "lucide-react";
+import { 
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Location } from "@/lib/api-types";
 
 interface BookingModalProps {
@@ -29,13 +48,8 @@ export default function BookingModal({
   onConfirm,
   isLoading
 }: BookingModalProps) {
-  // Mock payment methods
-  const [paymentMethod, setPaymentMethod] = useState({
-    id: 1,
-    type: 'card',
-    label: 'Credit Card',
-    lastFour: '4589'
-  });
+  // Payment methods
+  const [paymentMethod, setPaymentMethod] = useState("card");
   
   // Early return if ride is not selected
   if (!ride) return null;
@@ -138,13 +152,53 @@ export default function BookingModal({
         
         <div className="mb-4">
           <h4 className="font-medium mb-2 text-sm">Payment Method</h4>
-          <div className="border border-input rounded-lg p-3 flex items-center justify-between">
-            <div className="flex items-center">
-              <CreditCard className="h-4 w-4 mr-2 text-muted-foreground" />
-              <span>••••••• {paymentMethod.lastFour}</span>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </div>
+          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select payment method">
+                {paymentMethod === "card" && (
+                  <div className="flex items-center">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    <span>Credit/Debit Card</span>
+                  </div>
+                )}
+                {paymentMethod === "upi" && (
+                  <div className="flex items-center">
+                    <Landmark className="h-4 w-4 mr-2" />
+                    <span>UPI</span>
+                  </div>
+                )}
+                {paymentMethod === "cash" && (
+                  <div className="flex items-center">
+                    <Banknote className="h-4 w-4 mr-2" />
+                    <span>Cash</span>
+                  </div>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Payment Options</SelectLabel>
+                <SelectItem value="card">
+                  <div className="flex items-center">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    <span>Credit/Debit Card</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="upi">
+                  <div className="flex items-center">
+                    <Landmark className="h-4 w-4 mr-2" />
+                    <span>UPI</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="cash">
+                  <div className="flex items-center">
+                    <Banknote className="h-4 w-4 mr-2" />
+                    <span>Cash</span>
+                  </div>
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
         
         <DialogFooter className="flex flex-col sm:flex-row gap-2">

@@ -61,5 +61,5 @@ export interface RideRequest {
   distance: string;
   duration: string;
   status: string;
-  paymentMethod?: string;
+  paymentMethod: string;
 }
