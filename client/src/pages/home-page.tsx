@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/header";
 import SideMenu from "@/components/side-menu";
 import MapView from "@/components/map-view";
@@ -11,22 +11,30 @@ import FooterNav from "@/components/footer-nav";
 import ChatSupport from "@/components/chat-support";
 import { useGeolocation } from "@/lib/use-geolocation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { Location, RideEstimate } from "@/lib/api-types";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Location, RideEstimate, RideHistoryItem } from "@/lib/api-types";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function HomePage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedRide, setSelectedRide] = useState<any>(null);
   const [selectedRideType, setSelectedRideType] = useState<string>("all");
   const [sortOption, setSortOption] = useState<string>("price");
   
-  const { location: currentLocation } = useGeolocation();
+  const { location: currentLocation, triggerGetLocation } = useGeolocation();
   
   const [pickup, setPickup] = useState<Location | null>(null);
   const [dropoff, setDropoff] = useState<Location | null>(null);
+  
+  // Get ride history to display past bookings
+  const { data: rideHistory } = useQuery<RideHistoryItem[]>({
+    queryKey: ['/api/rides'],
+    enabled: !!user,
+  });
   
   // Use query for ride estimates when both pickup and dropoff are set
   const { data: rideEstimates, isLoading: isLoadingEstimates } = useQuery<RideEstimate[]>({
@@ -35,13 +43,23 @@ export default function HomePage() {
     queryFn: async () => {
       if (!pickup || !dropoff) return [];
       
-      const res = await apiRequest("POST", "/api/ride-estimates", {
-        pickupLatitude: pickup.latitude.toString(),
-        pickupLongitude: pickup.longitude.toString(),
-        dropoffLatitude: dropoff.latitude.toString(),
-        dropoffLongitude: dropoff.longitude.toString()
-      });
-      return await res.json();
+      try {
+        const res = await apiRequest("POST", "/api/ride-estimates", {
+          pickupLatitude: pickup.latitude.toString(),
+          pickupLongitude: pickup.longitude.toString(),
+          dropoffLatitude: dropoff.latitude.toString(),
+          dropoffLongitude: dropoff.longitude.toString()
+        });
+        return await res.json();
+      } catch (error) {
+        console.error("Error fetching ride estimates:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch ride estimates. Please try again.",
+          variant: "destructive",
+        });
+        return [];
+      }
     }
   });
   
@@ -75,6 +93,9 @@ export default function HomePage() {
         description: "Your ride has been booked successfully!",
       });
       setIsBookingModalOpen(false);
+      
+      // Invalidate ride history query to fetch updated history
+      queryClient.invalidateQueries({ queryKey: ['/api/rides'] });
     },
     onError: (error: Error) => {
       toast({
@@ -86,7 +107,7 @@ export default function HomePage() {
   });
   
   // Set current location as pickup when available
-  useState(() => {
+  useEffect(() => {
     if (currentLocation && !pickup) {
       setPickup({
         latitude: currentLocation.latitude,
@@ -94,7 +115,12 @@ export default function HomePage() {
         address: "Current Location"
       });
     }
-  });
+  }, [currentLocation, pickup]);
+  
+  // Get current location on component mount
+  useEffect(() => {
+    triggerGetLocation();
+  }, []);
   
   const handleRideSelect = (ride: any) => {
     setSelectedRide(ride);

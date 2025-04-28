@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Location } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
 import { Crosshair, Locate } from "lucide-react";
 import { useGeolocation } from "@/lib/use-geolocation";
+import L from "leaflet";
+import { initializeMap, updateMapMarkers, cleanupMap, reverseGeocode } from "@/lib/map-utils";
+import "leaflet/dist/leaflet.css";
 
 interface MapViewProps {
   pickup: Location | null;
@@ -13,49 +16,84 @@ interface MapViewProps {
 
 export default function MapView({ pickup, dropoff, onPickupChange, onDropoffChange }: MapViewProps) {
   const { triggerGetLocation } = useGeolocation();
-  const [map, setMap] = useState<any>(null);
+  const [map, setMap] = useState<L.Map | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
   
-  // Initialize map - in a real app, we'd use a proper map library like Leaflet or Mapbox
+  // Initialize map
   useEffect(() => {
-    // Mock map initialization code - in a real implementation, this would initialize the map
-    // For now, we'll just use a placeholder
-    
-    const mapContainer = document.getElementById('map-container');
-    if (mapContainer) {
-      // Map mockup is already in place
+    try {
+      const mapContainer = document.getElementById('map-container');
+      if (mapContainer) {
+        const mapInstance = initializeMap('map-container');
+        setMap(mapInstance);
+        mapRef.current = mapInstance;
+        
+        // Add click handler to map
+        mapInstance.on('click', async (e: L.LeafletMouseEvent) => {
+          const { lat, lng } = e.latlng;
+          const address = await reverseGeocode(lat, lng);
+          
+          // If pickup is not set, set it as pickup
+          // Otherwise, set as dropoff
+          if (!pickup) {
+            onPickupChange({
+              latitude: lat,
+              longitude: lng,
+              address
+            });
+          } else if (!dropoff) {
+            onDropoffChange({
+              latitude: lat,
+              longitude: lng,
+              address
+            });
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error initializing map:", error);
     }
     
     return () => {
-      // Cleanup map
+      cleanupMap();
     };
   }, []);
   
+  // Update markers when pickup or dropoff change
+  useEffect(() => {
+    if (mapRef.current) {
+      try {
+        updateMapMarkers(mapRef.current, pickup, dropoff);
+      } catch (error) {
+        console.error("Error updating map markers:", error);
+      }
+    }
+  }, [pickup, dropoff]);
+  
   const handleGetCurrentLocation = () => {
-    triggerGetLocation((location) => {
+    triggerGetLocation(async (location) => {
       if (location) {
-        onPickupChange({
-          latitude: location.latitude,
-          longitude: location.longitude,
-          address: "Current Location"
-        });
+        try {
+          const address = await reverseGeocode(location.latitude, location.longitude);
+          onPickupChange({
+            latitude: location.latitude,
+            longitude: location.longitude,
+            address: address || "Current Location"
+          });
+        } catch (error) {
+          onPickupChange({
+            latitude: location.latitude,
+            longitude: location.longitude,
+            address: "Current Location"
+          });
+        }
       }
     });
   };
   
   return (
     <div id="map-container" className="map-container relative">
-      {/* This would be a real map in a real implementation */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        {/* Center point indicator */}
-        <div className="absolute">
-          <Crosshair size={24} className="text-primary" />
-        </div>
-        
-        {/* Map attribution */}
-        <div className="absolute bottom-20 right-4 text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded">
-          Map data would be here
-        </div>
-      </div>
+      {/* Map will be rendered here by Leaflet */}
       
       {/* Geolocation button */}
       <div className="absolute bottom-4 right-4 z-10">
@@ -68,13 +106,6 @@ export default function MapView({ pickup, dropoff, onPickupChange, onDropoffChan
           <Locate className="text-primary" />
         </Button>
       </div>
-      
-      {/* Route visualization would go here */}
-      {pickup && dropoff && (
-        <div className="absolute inset-0 pointer-events-none">
-          {/* In a real app, we'd draw the route between pickup and dropoff */}
-        </div>
-      )}
     </div>
   );
 }

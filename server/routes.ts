@@ -1,16 +1,25 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { z } from "zod";
 import { insertSavedPlaceSchema, insertRideHistorySchema } from "@shared/schema";
 
+// Extend Request type to include user
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    [key: string]: any;
+  };
+  isAuthenticated(): boolean;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Auth routes
   setupAuth(app);
 
   // Middleware to check if user is authenticated
-  const ensureAuthenticated = (req: any, res: any, next: any) => {
+  const ensureAuthenticated = (req: AuthRequest, res: any, next: any) => {
     if (req.isAuthenticated()) {
       return next();
     }
@@ -18,8 +27,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Saved places routes
-  app.get("/api/places", ensureAuthenticated, async (req, res) => {
+  app.get("/api/places", ensureAuthenticated, async (req: AuthRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const places = await storage.getSavedPlaces(req.user.id);
       res.json(places);
     } catch (error) {
@@ -27,8 +40,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/places", ensureAuthenticated, async (req, res) => {
+  app.post("/api/places", ensureAuthenticated, async (req: AuthRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const placeData = insertSavedPlaceSchema.parse({
         ...req.body,
         userId: req.user.id
@@ -43,8 +60,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/places/:id", ensureAuthenticated, async (req, res) => {
+  app.delete("/api/places/:id", ensureAuthenticated, async (req: AuthRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const placeId = parseInt(req.params.id);
       const place = await storage.getSavedPlace(placeId);
       
@@ -64,8 +85,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Ride history routes
-  app.get("/api/rides", ensureAuthenticated, async (req, res) => {
+  app.get("/api/rides", ensureAuthenticated, async (req: AuthRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const rides = await storage.getRideHistory(req.user.id);
       res.json(rides);
     } catch (error) {
@@ -73,8 +98,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/rides", ensureAuthenticated, async (req, res) => {
+  app.post("/api/rides", ensureAuthenticated, async (req: AuthRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const rideData = insertRideHistorySchema.parse({
         ...req.body,
         userId: req.user.id
@@ -89,8 +118,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/rides/:id", ensureAuthenticated, async (req, res) => {
+  app.get("/api/rides/:id", ensureAuthenticated, async (req: AuthRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const rideId = parseInt(req.params.id);
       const ride = await storage.getRide(rideId);
       
@@ -109,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sample ride estimates - in a real app, this would connect to Uber, Ola, Rapido APIs
-  app.post("/api/ride-estimates", ensureAuthenticated, async (req, res) => {
+  app.post("/api/ride-estimates", async (req, res) => {
     try {
       const { pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude } = req.body;
       
