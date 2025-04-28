@@ -1,8 +1,11 @@
 import { users, type User, type InsertUser, savedPlaces, type SavedPlace, type InsertSavedPlace, rideHistory, type RideHistory, type InsertRideHistory } from "@shared/schema";
-import createMemoryStore from "memorystore";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import connectPg from "connect-pg-simple";
 import session from "express-session";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   // User operations
@@ -22,90 +25,91 @@ export interface IStorage {
   createRideHistory(ride: InsertRideHistory): Promise<RideHistory>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private savedPlaces: Map<number, SavedPlace>;
-  private rideHistory: Map<number, RideHistory>;
-  sessionStore: session.SessionStore;
-  
-  currentUserId: number;
-  currentSavedPlaceId: number;
-  currentRideHistoryId: number;
+export class DatabaseStorage implements IStorage {
+  sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.savedPlaces = new Map();
-    this.rideHistory = new Map();
-    this.currentUserId = 1;
-    this.currentSavedPlaceId = 1;
-    this.currentRideHistoryId = 1;
-    
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
     });
   }
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    // Clean up undefined values which can cause database errors
+    const cleanedData = Object.fromEntries(
+      Object.entries(insertUser).filter(([_, value]) => value !== undefined)
+    );
+    
+    const [user] = await db
+      .insert(users)
+      .values(cleanedData as InsertUser)
+      .returning();
     return user;
   }
   
   // Saved places methods
   async getSavedPlaces(userId: number): Promise<SavedPlace[]> {
-    return Array.from(this.savedPlaces.values()).filter(
-      (place) => place.userId === userId,
-    );
+    return db.select().from(savedPlaces).where(eq(savedPlaces.userId, userId));
   }
   
   async getSavedPlace(id: number): Promise<SavedPlace | undefined> {
-    return this.savedPlaces.get(id);
+    const [place] = await db.select().from(savedPlaces).where(eq(savedPlaces.id, id));
+    return place;
   }
   
   async createSavedPlace(place: InsertSavedPlace): Promise<SavedPlace> {
-    const id = this.currentSavedPlaceId++;
-    const savedPlace: SavedPlace = { ...place, id };
-    this.savedPlaces.set(id, savedPlace);
+    const [savedPlace] = await db
+      .insert(savedPlaces)
+      .values(place)
+      .returning();
     return savedPlace;
   }
   
   async deleteSavedPlace(id: number): Promise<void> {
-    this.savedPlaces.delete(id);
+    await db.delete(savedPlaces).where(eq(savedPlaces.id, id));
   }
   
   // Ride history methods
   async getRideHistory(userId: number): Promise<RideHistory[]> {
-    return Array.from(this.rideHistory.values())
-      .filter((ride) => ride.userId === userId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return db
+      .select()
+      .from(rideHistory)
+      .where(eq(rideHistory.userId, userId))
+      .orderBy({ timestamp: 'desc' });
   }
   
   async getRide(id: number): Promise<RideHistory | undefined> {
-    return this.rideHistory.get(id);
+    const [ride] = await db.select().from(rideHistory).where(eq(rideHistory.id, id));
+    return ride;
   }
   
   async createRideHistory(ride: InsertRideHistory): Promise<RideHistory> {
-    const id = this.currentRideHistoryId++;
-    const timestamp = new Date();
-    const rideRecord: RideHistory = { ...ride, id, timestamp };
-    this.rideHistory.set(id, rideRecord);
-    return rideRecord;
+    // Clean up undefined values which can cause database errors
+    const cleanedData = Object.fromEntries(
+      Object.entries(ride).filter(([_, value]) => value !== undefined)
+    );
+    
+    const [savedRide] = await db
+      .insert(rideHistory)
+      .values(cleanedData as InsertRideHistory)
+      .returning();
+    return savedRide;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
