@@ -90,7 +90,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(rideHistory)
       .where(eq(rideHistory.userId, userId))
-      .orderBy({ timestamp: 'desc' });
+      .orderBy(({ desc }) => [desc(rideHistory.timestamp)]);
   }
   
   async getRide(id: number): Promise<RideHistory | undefined> {

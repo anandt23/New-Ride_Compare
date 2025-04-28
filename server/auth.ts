@@ -30,13 +30,21 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // Generate a secure session secret if not provided
+  if (!process.env.SESSION_SECRET) {
+    process.env.SESSION_SECRET = randomBytes(32).toString('hex');
+    console.log("Generated a random SESSION_SECRET for this session");
+  }
+
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "ride-comparison-secret-key",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true
     }
   };
 
