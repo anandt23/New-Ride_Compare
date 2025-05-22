@@ -7,6 +7,7 @@ import LocationInput from "@/components/location-input";
 import RideTypeSelector from "@/components/ride-type-selector";
 import RideList from "@/components/ride-list";
 import BookingModal from "@/components/booking-modal";
+import RideTracking from "@/components/ride-tracking";
 import FooterNav from "@/components/footer-nav";
 import ChatSupport from "@/components/chat-support";
 import { useGeolocation } from "@/lib/use-geolocation";
